@@ -1,0 +1,6 @@
+python-dotenv 
+openai 
+azure-ai-documentintelligence 
+azure-identity 
+pillow 
+PyMuPDF
