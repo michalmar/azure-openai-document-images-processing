@@ -455,7 +455,7 @@ if __name__ == "__main__":
         # print("-------------------------------------------------------------------------------------------")
         # print(f"Updated markdown content with figure understanding:\n\n {updated_md_with_figure_understanding}")
 
-        with open(os.path.join(DIR_OUT,f'{file_name_without_extension}.md'), 'w') as file:
+        with open(os.path.join(DIR_OUT,f'{file_name_without_extension}.md'), 'w', encoding="utf-8") as file:
             file.write(updated_md_with_figure_understanding)
             doc_url = write_doc_on_blob_storage(updated_md_with_figure_understanding, f'{file_name_without_extension}.md')
             # print(f"Document saved to {doc_url}")
