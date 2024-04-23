@@ -36,17 +36,21 @@ from typing import Callable, List, Dict, Optional, Generator, Tuple, Union
 
 load_dotenv()
 
-doc_intelligence_endpoint = os.getenv("AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT")
-doc_intelligence_key = os.getenv("AZURE_DOCUMENT_INTELLIGENCE_KEY")
+AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT = os.getenv("AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT")
+AZURE_DOCUMENT_INTELLIGENCE_KEY = os.getenv("AZURE_DOCUMENT_INTELLIGENCE_KEY")
 
-aoai_api_base = os.getenv("AZURE_OPENAI_ENDPOINT")
-aoai_api_key= os.getenv("AZURE_OPENAI_API_KEY")
-aoai_deployment_name = 'gpt-x' # your model deployment name for GPT-4V
-aoai_api_version = '2024-02-15-preview' # this might change in the future
+AZURE_OPENAI_ENDPOINT = os.getenv("AZURE_OPENAI_ENDPOINT")
+AZURE_OPENAI_API_KEY= os.getenv("AZURE_OPENAI_API_KEY")
+AZURE_OPENAI_DEPLOYMENT_NAME = 'gpt-x' # your model deployment name for GPT-4V
+AZURE_OPENAI_API_VERSION = '2024-02-15-preview' # this might change in the future
 
-conn_str = os.getenv('AZURE_STORAGE_CONNECTION_STRING', None)
-container_name_images = os.getenv('AZURE_STORAGE_CONTAINER_NAME_IMAGES', None)
-container_name_docs = os.getenv('AZURE_STORAGE_CONTAINER_NAME_DOCS', None)
+AZURE_STORAGE_CONNECTION_STRING = os.getenv('AZURE_STORAGE_CONNECTION_STRING', None)
+AZURE_STORAGE_CONTAINER_NAME_IMAGES = os.getenv('AZURE_STORAGE_CONTAINER_NAME_IMAGES', None)
+AZURE_STORAGE_CONTAINER_NAME_DOCS = os.getenv('AZURE_STORAGE_CONTAINER_NAME_DOCS', None)
+
+DIR_IN = os.path.join("data","in")
+DIR_OUT = os.path.join("data","out")
+DIR_OUT_IMAGES = os.path.join("data","out", "images")
 
 # ## Crop figure from the document (pdf or image) based on the bounding box
 
@@ -117,6 +121,11 @@ def crop_image_from_file(file_path, page_number, bounding_box):
     else:
         return crop_image_from_image(file_path, page_number, bounding_box)
 
+
+# create directory if not exists
+def create_directory(directory_path):
+    if not os.path.exists(directory_path):
+        os.makedirs(directory_path)
 
 
 # ## Use Azure OpenAI (GPT-4V model) to understand the semantics of the figure content
@@ -279,7 +288,7 @@ def analyze_layout(input_file_path, output_folder):
 
     """
     document_intelligence_client = DocumentIntelligenceClient(
-        endpoint=doc_intelligence_endpoint, credential=AzureKeyCredential(doc_intelligence_key)
+        endpoint=AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT, credential=AzureKeyCredential(AZURE_DOCUMENT_INTELLIGENCE_KEY)
     )
 
     with open(input_file_path, "rb") as f:
@@ -330,10 +339,8 @@ def analyze_layout(input_file_path, output_folder):
 
                         output_file = f"{file_name_without_extension}_cropped_image_{idx}.png"
                         cropped_image_filename = os.path.join(output_folder, output_file)
-
-
-
                         cropped_image.save(cropped_image_filename)
+                        image_url = write_image_on_blob_storage(cropped_image, output_file)
                         # print(f"\tFigure {idx} cropped and saved as {cropped_image_filename}")
                         # img_description += understand_image_with_gptv(aoai_api_base, aoai_api_key, aoai_deployment_name, aoai_api_version, cropped_image_filename, figure.caption.content)
                         # print(f"\tDescription of figure {idx}: {img_description}")
@@ -359,7 +366,6 @@ def analyze_layout(input_file_path, output_folder):
 
                     output_file = f"{file_name_without_extension}_cropped_image_{idx}.png"
                     cropped_image_filename = os.path.join(output_folder, output_file)
-                    # cropped_image_filename = f"data/cropped/image_{idx}.png"
                     cropped_image.save(cropped_image_filename)
                     image_url = write_image_on_blob_storage(cropped_image, output_file)
                     # print(f"\tFIG: {cropped_image_filename} saved to {image_url}")
@@ -385,14 +391,14 @@ def write_image_on_blob_storage(data, filename):
     byte_stream.seek(0)
 
     data_bytes = byte_stream
-    container_name = container_name_images
+    container_name = AZURE_STORAGE_CONTAINER_NAME_IMAGES
     blob_name = filename
-    if conn_str and container_name:
+    if AZURE_STORAGE_CONNECTION_STRING and container_name:
         # Create full Blob URL
-        x = conn_str.split(';')
+        x = AZURE_STORAGE_CONNECTION_STRING.split(';')
         image_url = f"{x[0].split('=')[1]}://{x[1].split('=')[1]}.{x[3].split('=')[1]}/{container_name}/{blob_name}"
         # Upload data on Blob
-        blob_client = BlobClient.from_connection_string(conn_str=conn_str, container_name=container_name, blob_name=blob_name)
+        blob_client = BlobClient.from_connection_string(conn_str=AZURE_STORAGE_CONNECTION_STRING, container_name=container_name, blob_name=blob_name)
         content_settings = ContentSettings(content_type='image/png')
         blob_client.upload_blob(data_bytes, content_settings=content_settings, overwrite=True)
         return image_url
@@ -400,14 +406,14 @@ def write_image_on_blob_storage(data, filename):
 def write_doc_on_blob_storage(doc, filename):
 
     document_data = doc
-    container_name = container_name_docs
+    container_name = AZURE_STORAGE_CONTAINER_NAME_DOCS
     blob_name = filename
-    if conn_str and container_name:
+    if AZURE_STORAGE_CONNECTION_STRING and container_name:
         # Create full Blob URL
-        x = conn_str.split(';')
+        x = AZURE_STORAGE_CONNECTION_STRING.split(';')
         doc_url = f"{x[0].split('=')[1]}://{x[1].split('=')[1]}.{x[3].split('=')[1]}/{container_name}/{blob_name}"
         # Upload data on Blob
-        blob_client = BlobClient.from_connection_string(conn_str=conn_str, container_name=container_name, blob_name=blob_name)
+        blob_client = BlobClient.from_connection_string(conn_str=AZURE_STORAGE_CONNECTION_STRING, container_name=container_name, blob_name=blob_name)
         content_settings = ContentSettings(content_type='text/markdown')
         blob_client.upload_blob(document_data, content_settings=content_settings, overwrite=True)
         return doc_url
@@ -429,8 +435,11 @@ def get_files_recursively(directory_path: str) -> List[str]:
     return file_paths
 
 if __name__ == "__main__":
-    document_dir = os.path.join("data","in")
-    document_filepaths = get_files_recursively(document_dir)
+    create_directory(DIR_IN)
+    create_directory(DIR_OUT)
+    create_directory(DIR_OUT_IMAGES)
+
+    document_filepaths = get_files_recursively(DIR_IN)
     i = 1
     for document_path in document_filepaths:
 
@@ -441,31 +450,21 @@ if __name__ == "__main__":
         # Remove the file extension
         file_name_without_extension = os.path.splitext(base_name)[0]
 
-        updated_md_with_figure_understanding = analyze_layout(document_path, "data/images")
+        updated_md_with_figure_understanding = analyze_layout(document_path, DIR_OUT_IMAGES)
 
         # print("-------------------------------------------------------------------------------------------")
         # print(f"Updated markdown content with figure understanding:\n\n {updated_md_with_figure_understanding}")
 
-        with open(os.path.join('data','output',f'{file_name_without_extension}.md'), 'w') as file:
+        with open(os.path.join(DIR_OUT,f'{file_name_without_extension}.md'), 'w') as file:
             file.write(updated_md_with_figure_understanding)
             doc_url = write_doc_on_blob_storage(updated_md_with_figure_understanding, f'{file_name_without_extension}.md')
             # print(f"Document saved to {doc_url}")
         i = i + 1
 
-    print("All files processed successfully!")
-    # document_path = "data/eon-test-doc-with-images-01.pdf"
-    # # Get the base name of the file
-    # base_name = os.path.basename(document_path)
-    # # Remove the file extension
-    # file_name_without_extension = os.path.splitext(base_name)[0]
-
-    # updated_md_with_figure_understanding = analyze_layout(document_path, "data/cropped")
-
-    # print("-------------------------------------------------------------------------------------------")
-    # print(f"Updated markdown content with figure understanding:\n\n {updated_md_with_figure_understanding}")
-
-    # with open(os.path.join('data','output',f'{file_name_without_extension}.md'), 'w') as file:
-    #     file.write(updated_md_with_figure_understanding)
+    if i == 1:
+        print("No files found in the input directory!")
+    else:
+        print(f"All {i-1}file(s) processed successfully!")
 
 
 
